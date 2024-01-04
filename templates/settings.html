@@ -58,7 +58,7 @@
 				<div class="prefs-group">
 					<label for="show_nsfw">Show NSFW posts:</label>
 					<input type="hidden" value="off" name="show_nsfw">
-					<input type="checkbox" name="show_nsfw" id="show_nsfw" {% if prefs.show_nsfw == "on" %}checked{% endif %}>
+					<input type="checkbox" name="show_nsfw" id="show_nsfw" {% if prefs.show_nsfw == "on" %}checked{% endif %} disabled>
 				</div>
 				<div class="prefs-group">
 					<label for="blur_nsfw">Blur NSFW previews:</label>
