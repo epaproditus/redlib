@@ -178,6 +178,61 @@ pub struct Server {
 	router: Router<fn(Request<Body>) -> BoxResponse>,
 }
 
+/// Check if a request path should be allowed (only r/popular and related routes)
+pub fn is_allowed_path(path: &str) -> bool {
+	let path = path.trim_start_matches('/');
+	
+	// Allow static assets
+	if path.starts_with("style.css") || 
+	   path.starts_with("manifest.json") || 
+	   path.starts_with("robots.txt") || 
+	   path.starts_with("favicon.ico") || 
+	   path.starts_with("logo.png") || 
+	   path.starts_with("Inter.var.woff2") || 
+	   path.starts_with("touch-icon-iphone.png") || 
+	   path.starts_with("apple-touch-icon.png") || 
+	   path.starts_with("opensearch.xml") || 
+	   path.starts_with("playHLSVideo.js") || 
+	   path.starts_with("hls.min.js") || 
+	   path.starts_with("highlighted.js") || 
+	   path.starts_with("check_update.js") || 
+	   path.starts_with("copy.js") ||
+	   path.starts_with("vid/") || 
+	   path.starts_with("hls/") || 
+	   path.starts_with("img/") || 
+	   path.starts_with("thumb/") || 
+	   path.starts_with("emoji/") || 
+	   path.starts_with("emote/") || 
+	   path.starts_with("preview/") || 
+	   path.starts_with("style/") || 
+	   path.starts_with("static/") {
+		return true;
+	}
+	
+	// Allow r/popular and its variants
+	if path == "r/popular" || 
+	   path.starts_with("r/popular/") ||
+	   path == "popular" ||
+	   path.starts_with("r/popular.rss") {
+		return true;
+	}
+	
+	// Allow front page (will redirect to popular)
+	if path.is_empty() || path == "" {
+		return true;
+	}
+	
+	// Allow settings and info pages
+	if path.starts_with("settings") || 
+	   path.starts_with("info") || 
+	   path.starts_with("instances.json") || 
+	   path.starts_with("commits.atom") {
+		return true;
+	}
+	
+	false
+}
+
 #[macro_export]
 macro_rules! headers(
 	{ $($key:expr => $value:expr),+ } => {
@@ -349,6 +404,11 @@ impl Server {
 						&Method::HEAD => (&Method::GET, true),
 						method => (method, false),
 					};
+
+					// Check if this path is allowed (only r/popular and related routes)
+					if !is_allowed_path(&path) {
+						return new_boilerplate(def_headers, req_headers, 404, Body::from("This route is disabled. Only r/popular is available.")).boxed();
+					}
 
 					// Match the visited path with an added route
 					match router.recognize(&format!("/{}{}", method.as_str(), path)) {

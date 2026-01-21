@@ -65,33 +65,16 @@ pub async fn community(req: Request<Body>) -> Result<Response<Body>, String> {
 	// Build Reddit API path
 	let root = req.uri().path() == "/";
 	let query = req.uri().query().unwrap_or_default().to_string();
-	let subscribed = setting(&req, "subscriptions");
-	let front_page = setting(&req, "front_page");
-	let remove_default_feeds = setting(&req, "remove_default_feeds") == "on";
 	let post_sort = req.cookie("post_sort").map_or_else(|| "hot".to_string(), |c| c.value().to_string());
 	let sort = req.param("sort").unwrap_or_else(|| req.param("id").unwrap_or(post_sort));
 
-	let sub_name = req.param("sub").unwrap_or(if front_page == "default" || front_page.is_empty() {
-		if subscribed.is_empty() {
-			"popular".to_string()
-		} else {
-			subscribed.clone()
-		}
-	} else {
-		front_page.clone()
-	});
+	// Only allow r/popular - force all requests to use popular
+	let sub_name = "popular".to_string();
 
-	if (sub_name == "popular" || sub_name == "all") && remove_default_feeds {
-		if subscribed.is_empty() {
-			return info(req, "Subscribe to some subreddits! (Default feeds disabled in settings)").await;
-		} else {
-			// If there are subscribed subs, but we get here, then the problem is that front_page pref is set to something besides default.
-			// Tell user to go to settings and change front page to default.
-			return info(
-				req,
-				"You have subscribed to some subreddits, but your front page is not set to default. Visit settings and change front page to default.",
-			)
-			.await;
+	// If someone tries to access any other subreddit, redirect to popular
+	if let Some(requested_sub) = req.param("sub") {
+		if requested_sub != "popular" {
+			return Ok(redirect("/r/popular"));
 		}
 	}
 
@@ -106,23 +89,10 @@ pub async fn community(req: Request<Body>) -> Result<Response<Body>, String> {
 		return Ok(redirect(&["/user/", &sub_name[2..]].concat()));
 	}
 
-	// Request subreddit metadata
-	let sub = if !sub_name.contains('+') && sub_name != subscribed && sub_name != "popular" && sub_name != "all" {
-		// Regular subreddit
-		subreddit(&sub_name, quarantined).await.unwrap_or_default()
-	} else if sub_name == subscribed {
-		// Subscription feed
-		if req.uri().path().starts_with("/r/") {
-			subreddit(&sub_name, quarantined).await.unwrap_or_default()
-		} else {
-			Subreddit::default()
-		}
-	} else {
-		// Multireddit, all, popular
-		Subreddit {
-			name: sub_name.clone(),
-			..Subreddit::default()
-		}
+	// Request subreddit metadata - only for popular
+	let sub = Subreddit {
+		name: "popular".to_string(),
+		..Subreddit::default()
 	};
 
 	let req_url = req.uri().to_string();
@@ -597,16 +567,24 @@ pub async fn rss(req: Request<Body>) -> Result<Response<Body>, String> {
 	use hyper::header::CONTENT_TYPE;
 	use rss::{ChannelBuilder, Item};
 
-	// Get subreddit
+	// Get subreddit - only allow popular
 	let sub = req.param("sub").unwrap_or_default();
+	if sub != "popular" {
+		return Ok(error(req, "Only r/popular RSS feed is available").await.unwrap_or_default());
+	}
 	let post_sort = req.cookie("post_sort").map_or_else(|| "hot".to_string(), |c| c.value().to_string());
 	let sort = req.param("sort").unwrap_or_else(|| req.param("id").unwrap_or(post_sort));
 
 	// Get path
-	let path = format!("/r/{sub}/{sort}.json?{}", req.uri().query().unwrap_or_default());
+	let path = format!("/r/popular/{sort}.json?{}", req.uri().query().unwrap_or_default());
 
-	// Get subreddit data
-	let subreddit = subreddit(&sub, false).await?;
+	// Get subreddit data - use default for popular
+	let subreddit = Subreddit {
+		name: "popular".to_string(),
+		title: "Popular Posts".to_string(),
+		description: "Popular posts from Reddit".to_string(),
+		..Subreddit::default()
+	};
 
 	// Get posts
 	let (posts, _) = Post::fetch(&path, false).await?;

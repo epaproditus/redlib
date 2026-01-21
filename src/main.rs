@@ -279,134 +279,23 @@ async fn main() {
 	app.at("/style/*path").get(|r| proxy(r, "https://styles.redditmedia.com/{path}").boxed());
 	app.at("/static/*path").get(|r| proxy(r, "https://www.redditstatic.com/{path}").boxed());
 
-	// Browse user profile
-	app
-		.at("/u/:name")
-		.get(|r| async move { Ok(redirect(&format!("/user/{}", r.param("name").unwrap_or_default()))) }.boxed());
-	app.at("/u/:name/comments/:id/:title").get(|r| post::item(r).boxed());
-	app.at("/u/:name/comments/:id/:title/:comment_id").get(|r| post::item(r).boxed());
-
-	app.at("/user/[deleted]").get(|req| error(req, "User has deleted their account").boxed());
-	app.at("/user/:name.rss").get(|r| user::rss(r).boxed());
-	app.at("/user/:name").get(|r| user::profile(r).boxed());
-	app.at("/user/:name/:listing").get(|r| user::profile(r).boxed());
-	app.at("/user/:name/comments/:id").get(|r| post::item(r).boxed());
-	app.at("/user/:name/comments/:id/:title").get(|r| post::item(r).boxed());
-	app.at("/user/:name/comments/:id/:title/:comment_id").get(|r| post::item(r).boxed());
-
 	// Configure settings
 	app.at("/settings").get(|r| settings::get(r).boxed()).post(|r| settings::set(r).boxed());
 	app.at("/settings/restore").get(|r| settings::restore(r).boxed());
 	app.at("/settings/encoded-restore").post(|r| settings::encoded_restore(r).boxed());
 	app.at("/settings/update").get(|r| settings::update(r).boxed());
 
-	// RSS Subscriptions
-	app.at("/r/:sub.rss").get(|r| subreddit::rss(r).boxed());
+	// Only allow r/popular routes
+	app.at("/r/popular").get(|r| subreddit::community(r).boxed());
+	app.at("/r/popular/:sort").get(|r| subreddit::community(r).boxed());
+	app.at("/r/popular.rss").get(|r| subreddit::rss(r).boxed());
 
-	// Subreddit services
-	app
-		.at("/r/:sub")
-		.get(|r| subreddit::community(r).boxed())
-		.post(|r| subreddit::add_quarantine_exception(r).boxed());
-
-	app
-		.at("/r/u_:name")
-		.get(|r| async move { Ok(redirect(&format!("/user/{}", r.param("name").unwrap_or_default()))) }.boxed());
-
-	app.at("/r/:sub/subscribe").post(|r| subreddit::subscriptions_filters(r).boxed());
-	app.at("/r/:sub/unsubscribe").post(|r| subreddit::subscriptions_filters(r).boxed());
-	app.at("/r/:sub/filter").post(|r| subreddit::subscriptions_filters(r).boxed());
-	app.at("/r/:sub/unfilter").post(|r| subreddit::subscriptions_filters(r).boxed());
-
-	app.at("/r/:sub/comments/:id").get(|r| post::item(r).boxed());
-	app.at("/r/:sub/comments/:id/:title").get(|r| post::item(r).boxed());
-	app.at("/r/:sub/comments/:id/:title/:comment_id").get(|r| post::item(r).boxed());
-	app.at("/comments/:id").get(|r| post::item(r).boxed());
-	app.at("/comments/:id/comments").get(|r| post::item(r).boxed());
-	app.at("/comments/:id/comments/:comment_id").get(|r| post::item(r).boxed());
-	app.at("/comments/:id/:title").get(|r| post::item(r).boxed());
-	app.at("/comments/:id/:title/:comment_id").get(|r| post::item(r).boxed());
-
-	app.at("/r/:sub/duplicates/:id").get(|r| duplicates::item(r).boxed());
-	app.at("/r/:sub/duplicates/:id/:title").get(|r| duplicates::item(r).boxed());
-	app.at("/duplicates/:id").get(|r| duplicates::item(r).boxed());
-	app.at("/duplicates/:id/:title").get(|r| duplicates::item(r).boxed());
-
-	app.at("/r/:sub/search").get(|r| search::find(r).boxed());
-
-	app
-		.at("/r/:sub/w")
-		.get(|r| async move { Ok(redirect(&format!("/r/{}/wiki", r.param("sub").unwrap_or_default()))) }.boxed());
-	app
-		.at("/r/:sub/w/*page")
-		.get(|r| async move { Ok(redirect(&format!("/r/{}/wiki/{}", r.param("sub").unwrap_or_default(), r.param("wiki").unwrap_or_default()))) }.boxed());
-	app.at("/r/:sub/wiki").get(|r| subreddit::wiki(r).boxed());
-	app.at("/r/:sub/wiki/*page").get(|r| subreddit::wiki(r).boxed());
-
-	app.at("/r/:sub/about/sidebar").get(|r| subreddit::sidebar(r).boxed());
-
-	app.at("/r/:sub/:sort").get(|r| subreddit::community(r).boxed());
-
-	// Front page
+	// Front page redirects to r/popular
 	app.at("/").get(|r| subreddit::community(r).boxed());
-
-	// View Reddit wiki
-	app.at("/w").get(|_| async { Ok(redirect("/wiki")) }.boxed());
-	app
-		.at("/w/*page")
-		.get(|r| async move { Ok(redirect(&format!("/wiki/{}", r.param("page").unwrap_or_default()))) }.boxed());
-	app.at("/wiki").get(|r| subreddit::wiki(r).boxed());
-	app.at("/wiki/*page").get(|r| subreddit::wiki(r).boxed());
-
-	// Search all of Reddit
-	app.at("/search").get(|r| search::find(r).boxed());
-
-	// Handle about pages
-	app.at("/about").get(|req| error(req, "About pages aren't added yet").boxed());
 
 	// Instance info page
 	app.at("/info").get(|r| instance_info::instance_info(r).boxed());
 	app.at("/info.:extension").get(|r| instance_info::instance_info(r).boxed());
-
-	// Handle obfuscated share links.
-	// Note that this still forces the server to follow the share link to get to the post, so maybe this wants to be updated with a warning before it follow it
-	app.at("/r/:sub/s/:id").get(|req: Request<Body>| {
-		Box::pin(async move {
-			let sub = req.param("sub").unwrap_or_default();
-			match req.param("id").as_deref() {
-				// Share link
-				Some(id) if (8..12).contains(&id.len()) => match canonical_path(format!("/r/{sub}/s/{id}"), 3).await {
-					Ok(Some(path)) => Ok(redirect(&path)),
-					Ok(None) => error(req, "Post ID is invalid. It may point to a post on a community that has been banned.").await,
-					Err(e) => error(req, &e).await,
-				},
-
-				// Error message for unknown pages
-				_ => error(req, "Nothing here").await,
-			}
-		})
-	});
-
-	app.at("/:id").get(|req: Request<Body>| {
-		Box::pin(async move {
-			match req.param("id").as_deref() {
-				// Sort front page
-				Some("best" | "hot" | "new" | "top" | "rising" | "controversial") => subreddit::community(req).await,
-
-				// Short link for post
-				Some(id) if (5..8).contains(&id.len()) => match canonical_path(format!("/comments/{id}"), 3).await {
-					Ok(path_opt) => match path_opt {
-						Some(path) => Ok(redirect(&path)),
-						None => error(req, "Post ID is invalid. It may point to a post on a community that has been banned.").await,
-					},
-					Err(e) => error(req, &e).await,
-				},
-
-				// Error message for unknown pages
-				_ => error(req, "Nothing here").await,
-			}
-		})
-	});
 
 	// Default service in case no routes match
 	app.at("/*").get(|req| error(req, "Nothing here").boxed());
