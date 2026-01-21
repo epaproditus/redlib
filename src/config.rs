@@ -132,7 +132,7 @@ impl Config {
 			var(key).ok().or_else(|| var(legacy_key).ok()).or_else(|| get_setting_from_config(key, &config))
 		};
 		Self {
-			sfw_only: parse("REDLIB_SFW_ONLY"),
+			sfw_only: Some("on".to_string()),
 			default_theme: parse("REDLIB_DEFAULT_THEME"),
 			default_front_page: parse("REDLIB_DEFAULT_FRONT_PAGE"),
 			default_layout: parse("REDLIB_DEFAULT_LAYOUT"),
@@ -140,7 +140,7 @@ impl Config {
 			default_wide: parse("REDLIB_DEFAULT_WIDE"),
 			default_comment_sort: parse("REDLIB_DEFAULT_COMMENT_SORT"),
 			default_blur_spoiler: parse("REDLIB_DEFAULT_BLUR_SPOILER"),
-			default_show_nsfw: parse("REDLIB_DEFAULT_SHOW_NSFW"),
+			default_show_nsfw: Some("off".to_string()),
 			default_blur_nsfw: parse("REDLIB_DEFAULT_BLUR_NSFW"),
 			default_use_hls: parse("REDLIB_DEFAULT_USE_HLS"),
 			default_hide_hls_notification: parse("REDLIB_DEFAULT_HIDE_HLS_NOTIFICATION"),

@@ -1356,10 +1356,7 @@ pub async fn info(req: Request<Body>, msg: &str) -> Result<Response<Body>, Strin
 /// subreddits or posts or userpages for users Reddit has deemed NSFW will
 /// be denied.
 pub fn sfw_only() -> bool {
-	match get_setting("REDLIB_SFW_ONLY") {
-		Some(val) => val == "on",
-		None => false,
-	}
+	true
 }
 
 /// Returns true if the config/env variable REDLIB_ENABLE_RSS is set to "on".
